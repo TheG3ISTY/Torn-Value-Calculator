@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Torn Market Pricer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+  :root{--bg:#07070c;--surface:#0e0e16;--s2:#15151f;--s3:#1c1c2a;--brd:#252538;--tx:#e4e4ee;--txd:#8585a0;--txm:#4e4e68;--red:#ff3848;--rg:rgba(255,56,72,.25);--grn:#22d97b;--gd:rgba(34,217,123,.12);--gold:#f0c530;--ora:#ff8c38;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--tx);font-family:'JetBrains Mono','Courier New',monospace;min-height:100vh;}
+  body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(255,56,72,.04) 0%,transparent 60%);pointer-events:none;z-index:0;}
+  .app{max-width:1140px;margin:0 auto;padding:28px 24px;position:relative;z-index:1;}
+
+  /* Header */
+  .hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--brd);}
+  .hdr-l{display:flex;align-items:center;gap:14px;}
+  .hdr-ico{width:44px;height:44px;background:linear-gradient(135deg,#ff3848,#ff6840);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;color:#fff;box-shadow:0 0 24px var(--rg);}
+  .hdr h1{font-size:17px;font-weight:700;letter-spacing:3px;text-transform:uppercase;}
+  .hdr .sub{font-size:10px;color:var(--txm);letter-spacing:1.5px;}
+  .st{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--txm);text-transform:uppercase;letter-spacing:1.5px;}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--txm);transition:all .3s;}
+  .dot.on{background:var(--grn);box-shadow:0 0 10px rgba(34,217,123,.5);}
+
+  /* Panel */
+  .pnl{background:var(--surface);border:1px solid var(--brd);border-radius:12px;padding:22px;margin-bottom:20px;}
+  .kr{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap;}
+  .kw{flex:1;min-width:200px;position:relative;}
+  .kw label{position:absolute;top:-7px;left:12px;background:var(--surface);padding:0 6px;font-size:9px;color:var(--txm);text-transform:uppercase;letter-spacing:2px;z-index:1;}
+  .ki{width:100%;height:46px;background:var(--s2);border:1px solid var(--brd);border-radius:8px;padding:0 16px;color:var(--tx);font-family:inherit;font-size:14px;letter-spacing:3px;outline:none;transition:border .2s;}
+  .ki:focus{border-color:var(--red);box-shadow:0 0 0 2px var(--rg);}
+  .ki::placeholder{color:var(--txm);letter-spacing:1px;font-size:12px;}
+
+  .btn{height:46px;padding:0 26px;border:none;border-radius:8px;font-family:inherit;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:2px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+  .br{background:var(--red);color:#fff;}.br:hover{filter:brightness(1.15);box-shadow:0 0 20px var(--rg);}
+  .br:disabled{background:var(--s3);color:var(--txm);cursor:wait;box-shadow:none;filter:none;}
+
+  .err{background:rgba(255,56,72,.08);border:1px solid rgba(255,56,72,.25);border-radius:8px;padding:12px 16px;margin-bottom:16px;color:var(--red);font-size:12px;display:none;}
+  .err.show{display:block;}
+
+  /* Tabs */
+  .tabs{display:flex;gap:0;margin-bottom:20px;border-bottom:1px solid var(--brd);}
+  .tb{padding:12px 22px;background:none;border:none;border-bottom:2px solid transparent;color:var(--txm);font-family:inherit;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px;}
+  .tb.active{color:var(--tx);border-bottom-color:var(--red);}
+  .tb .cnt{font-size:9px;color:var(--red);}
+  .tb .badge{background:var(--ora);color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;min-width:18px;text-align:center;line-height:1.3;}
+
+  /* Controls */
+  .ctrls{display:flex;gap:14px;align-items:center;margin-bottom:18px;flex-wrap:wrap;}
+  .cg{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--brd);border-radius:10px;padding:10px 16px;}
+  .cg .lbl{font-size:10px;color:var(--txd);text-transform:uppercase;letter-spacing:1.5px;}
+  .sli{-webkit-appearance:none;width:130px;height:4px;background:var(--s3);border-radius:2px;outline:none;}
+  .sli::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;background:var(--red);border-radius:50%;cursor:pointer;box-shadow:0 0 8px var(--rg);}
+  .pv{font-size:16px;font-weight:700;color:var(--red);min-width:42px;text-align:right;}
+  .sw{flex:1;min-width:180px;position:relative;}
+  .sw .ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--txm);font-size:13px;pointer-events:none;}
+  .si{width:100%;height:42px;background:var(--surface);border:1px solid var(--brd);border-radius:10px;padding:0 14px 0 38px;color:var(--tx);font-family:inherit;font-size:12px;outline:none;transition:border .2s;}
+  .si:focus{border-color:var(--red);}
+  .si::placeholder{color:var(--txm);}
+  .cs{height:42px;background:var(--surface);border:1px solid var(--brd);border-radius:10px;padding:0 12px;color:var(--tx);font-family:inherit;font-size:11px;outline:none;cursor:pointer;min-width:150px;}
+  .cs option{background:var(--s2);}
+
+  /* Chips */
+  .chips{display:flex;gap:14px;margin-bottom:18px;flex-wrap:wrap;}
+  .chip{background:var(--surface);border:1px solid var(--brd);border-radius:8px;padding:8px 14px;display:flex;align-items:center;gap:8px;}
+  .chip .cl{font-size:9px;color:var(--txm);text-transform:uppercase;letter-spacing:1px;}
+  .chip .cv{font-size:13px;font-weight:600;}
+  .cr{color:var(--red);}.cg2{color:var(--grn);}.cgl{color:var(--gold);}
+
+  /* Table */
+  .tw{background:var(--surface);border:1px solid var(--brd);border-radius:12px;overflow:hidden;}
+  .ts{overflow-x:auto;max-height:62vh;overflow-y:auto;}
+  table{width:100%;border-collapse:collapse;min-width:680px;}
+  thead{position:sticky;top:0;z-index:10;}
+  th{background:var(--s2);padding:13px 14px;text-align:left;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:2px;color:var(--txm);border-bottom:1px solid var(--brd);cursor:pointer;user-select:none;white-space:nowrap;transition:color .15s;}
+  th:hover{color:var(--txd);}
+  th.sorted{color:var(--red);}
+  th .arr{margin-left:3px;font-size:8px;}
+  td{padding:11px 14px;font-size:12px;border-bottom:1px solid rgba(37,37,56,.6);white-space:nowrap;}
+  tr:hover td{background:rgba(255,56,72,.02);}
+  .ic{display:flex;align-items:center;gap:10px;}
+  .iimg{width:28px;height:28px;border-radius:5px;background:var(--s3);object-fit:contain;}
+  .inm{font-weight:500;}
+  .itp{font-size:9px;color:var(--txm);text-transform:uppercase;letter-spacing:1px;}
+  .pm{color:var(--txd);}.ps{color:var(--grn);font-weight:600;}.pd{color:var(--red);font-size:10px;}.pc{color:var(--txd);font-size:11px;}
+
+  /* ── Add-to-basket cell ── */
+  .atb-cell{position:relative;}
+  .add-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--brd);background:var(--s3);color:var(--grn);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;line-height:1;font-family:inherit;}
+  .add-btn:hover{background:var(--grn);color:#fff;border-color:var(--grn);box-shadow:0 0 10px rgba(34,217,123,.3);}
+  .add-btn.in-basket{background:var(--ora);border-color:var(--ora);color:#fff;font-size:11px;}
+  .add-btn.in-basket:hover{filter:brightness(1.2);}
+
+  /* Qty popover */
+  .qty-pop{position:absolute;left:36px;top:50%;transform:translateY(-50%);background:var(--s2);border:1px solid var(--grn);border-radius:8px;padding:6px;display:flex;align-items:center;gap:4px;z-index:20;box-shadow:0 4px 20px rgba(0,0,0,.5);animation:popIn .15s ease-out;}
+  @keyframes popIn{from{opacity:0;transform:translateY(-50%) scale(.9);}to{opacity:1;transform:translateY(-50%) scale(1);}}
+  .qty-pop input{width:54px;height:30px;background:var(--s3);border:1px solid var(--brd);border-radius:5px;padding:0 4px;color:var(--tx);font-family:inherit;font-size:12px;text-align:center;outline:none;}
+  .qty-pop input:focus{border-color:var(--grn);}
+  .qty-pop .qp-ok{width:30px;height:30px;border-radius:5px;border:none;background:var(--grn);color:#fff;font-size:14px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;transition:filter .1s;}
+  .qty-pop .qp-ok:hover{filter:brightness(1.2);}
+  .qty-pop .qp-x{width:30px;height:30px;border-radius:5px;border:1px solid var(--brd);background:var(--s3);color:var(--txd);font-size:13px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;}
+  .qty-pop .qp-x:hover{color:var(--red);border-color:var(--red);}
+
+  /* ── BASKET ── */
+  .basket-panel{background:var(--surface);border:1px solid var(--brd);border-radius:12px;overflow:hidden;}
+  .basket-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--brd);flex-wrap:wrap;gap:12px;}
+  .basket-header .bh-left{display:flex;align-items:center;gap:10px;}
+  .basket-header .bh-left .bh-icon{font-size:20px;}
+  .basket-header .bh-left .bh-title{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:2px;}
+  .basket-actions{display:flex;gap:8px;}
+  .ba-btn{padding:7px 14px;border-radius:6px;font-family:inherit;font-size:10px;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px;border:1px solid var(--brd);transition:all .15s;}
+  .ba-clear{background:rgba(255,56,72,.1);border-color:rgba(255,56,72,.25);color:var(--red);}
+  .ba-clear:hover{background:rgba(255,56,72,.2);}
+  .ba-add{background:rgba(34,217,123,.1);border-color:rgba(34,217,123,.25);color:var(--grn);}
+  .ba-add:hover{background:rgba(34,217,123,.2);}
+
+  .basket-table{width:100%;border-collapse:collapse;}
+  .basket-table th{background:var(--s2);padding:12px 14px;text-align:left;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:2px;color:var(--txm);border-bottom:1px solid var(--brd);cursor:default;}
+  .basket-table td{padding:10px 14px;font-size:12px;border-bottom:1px solid rgba(37,37,56,.5);}
+  .basket-table tr:hover td{background:rgba(255,140,56,.02);}
+  .bsk-rm{width:24px;height:24px;border-radius:5px;border:1px solid rgba(255,56,72,.2);background:rgba(255,56,72,.08);color:var(--red);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;font-family:inherit;}
+  .bsk-rm:hover{background:var(--red);color:#fff;}
+  .bsk-qty{width:60px;height:30px;background:var(--s2);border:1px solid var(--brd);border-radius:5px;padding:0 6px;color:var(--tx);font-family:inherit;font-size:12px;text-align:center;outline:none;}
+  .bsk-qty:focus{border-color:var(--ora);}
+  .bsk-price-input{width:100px;height:30px;background:var(--s2);border:1px solid var(--brd);border-radius:5px;padding:0 8px;color:var(--tx);font-family:inherit;font-size:12px;outline:none;}
+  .bsk-price-input:focus{border-color:var(--ora);}
+  .bsk-name-input{width:160px;height:30px;background:var(--s2);border:1px solid var(--brd);border-radius:5px;padding:0 8px;color:var(--tx);font-family:inherit;font-size:12px;outline:none;}
+  .bsk-name-input:focus{border-color:var(--ora);}
+
+  .basket-footer{border-top:2px solid var(--brd);padding:18px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;}
+  .bf-stats{display:flex;gap:24px;flex-wrap:wrap;}
+  .bf-stat .bf-label{font-size:9px;color:var(--txm);text-transform:uppercase;letter-spacing:2px;margin-bottom:3px;}
+  .bf-stat .bf-val{font-size:14px;font-weight:600;}
+  .bf-total .bf-label{color:var(--ora);}
+  .bf-total .bf-val{font-size:24px;font-weight:700;color:var(--ora);}
+  .bf-market .bf-val{color:var(--txd);}
+  .bf-saved .bf-val{color:var(--red);}
+  .bf-items .bf-val{color:var(--grn);}
+
+  .empty{text-align:center;padding:50px 20px;color:var(--txm);}
+  .empty .big{font-size:28px;margin-bottom:10px;}
+  .loading{text-align:center;padding:70px 20px;color:var(--txm);}
+  .spinner{width:36px;height:36px;border:3px solid var(--brd);border-top-color:var(--red);border-radius:50%;margin:0 auto 16px;animation:spin .7s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .footer{text-align:center;padding:24px 0;font-size:9px;color:var(--txm);letter-spacing:1.5px;text-transform:uppercase;}
+
+  @media(max-width:640px){
+    .hdr{flex-direction:column;gap:10px;align-items:flex-start;}
+    .kr{flex-direction:column;}
+    .ctrls{flex-direction:column;align-items:stretch;}
+    .tabs{overflow-x:auto;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="hdr">
+    <div class="hdr-l"><div class="hdr-ico">TC</div><div><h1>Market Pricer</h1><div class="sub">Quick-sell value calculator</div></div></div>
+    <div class="st"><div class="dot" id="dot"></div><span id="stTxt">Disconnected</span></div>
+  </div>
+
+  <div class="pnl">
+    <div class="kr">
+      <div class="kw"><label>Torn API Key</label><input type="password" class="ki" id="keyIn" placeholder="16-character key" maxlength="16" autocomplete="off"></div>
+      <button class="btn br" id="loadBtn" onclick="loadMarket()">Load Prices</button>
+    </div>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <div class="tabs" id="tabs" style="display:none">
+    <button class="tb active" id="tabMarket" onclick="switchTab('market')">All Items <span class="cnt" id="cntM"></span></button>
+    <button class="tb" id="tabBasket" onclick="switchTab('basket')">&#128722; Selling Basket <span class="badge" id="cntB" style="display:none">0</span></button>
+  </div>
+
+  <div class="ctrls" id="ctrls" style="display:none">
+    <div class="cg"><span class="lbl">Sell at</span><input type="range" class="sli" id="pctS" min="50" max="100" value="90" oninput="onPct()"><span class="pv" id="pctV">90%</span></div>
+    <div class="sw" id="searchWrap"><span class="ico">&#128269;</span><input type="text" class="si" id="sIn" placeholder="Search items..." oninput="render()"></div>
+    <select class="cs" id="catS" onchange="render()"><option value="">All Categories</option></select>
+  </div>
+
+  <div class="chips" id="chips" style="display:none">
+    <div class="chip"><span class="cl">Total</span><span class="cv cr" id="sT">0</span></div>
+    <div class="chip"><span class="cl">Showing</span><span class="cv cg2" id="sS">0</span></div>
+    <div class="chip"><span class="cl">Refreshed</span><span class="cv cgl" id="sTm">--</span></div>
+  </div>
+
+  <div id="marketView"></div>
+  <div id="basketView" style="display:none"></div>
+  <div class="loading" id="loader" style="display:none"><div class="spinner"></div><div id="loaderTxt">Loading...</div></div>
+  <div class="footer">Torn Market Pricer &middot; TheG3ISTY [4117638] &middot; Zero To Hero</div>
+</div>
+
+<script>
+let allItems=[],basket=[],pct=90,sortField='market_value',sortDir=-1,currentTab='market';
+let basketUid=0;
+let openPopover=null; // track which item row has the qty popover open
+
+const $=id=>document.getElementById(id);
+function showErr(m){const e=$('err');e.textContent=m;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),8000);}
+function fmt(n){if(!n)return'—';if(n>=1e9)return'$'+(n/1e9).toFixed(2)+'B';if(n>=1e6)return'$'+(n/1e6).toFixed(2)+'M';if(n>=1e3)return'$'+(n/1e3).toFixed(1)+'K';return'$'+n.toLocaleString();}
+function fmtN(n){if(!n)return'—';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return n.toLocaleString();}
+function fmtExact(n){if(!n)return'$0';return'$'+n.toLocaleString();}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function getKey(){const k=$('keyIn').value.trim();if(!k||k.length!==16){showErr('API key must be exactly 16 characters.');return null;}return k;}
+
+// ── Popover for qty before adding ──
+function togglePopover(itemId){
+  if(openPopover===itemId){openPopover=null;render();return;}
+  openPopover=itemId;
+  render();
+  // Focus the qty input after render
+  setTimeout(()=>{const inp=document.getElementById('qp-input-'+itemId);if(inp){inp.focus();inp.select();}},50);
+}
+
+function confirmAdd(itemId){
+  const inp=document.getElementById('qp-input-'+itemId);
+  const qty=Math.max(1,parseInt(inp?.value)||1);
+  const item=allItems.find(i=>i.id===itemId);
+  if(!item)return;
+  addToBasket(itemId,item.name,item.market_value,qty);
+  openPopover=null;
+  render();
+}
+
+function popoverKeydown(e,itemId){
+  if(e.key==='Enter')confirmAdd(itemId);
+  if(e.key==='Escape'){openPopover=null;render();}
+}
+
+// ── Basket logic ──
+function addToBasket(id,name,market_price,qty){
+  const exists=basket.find(b=>String(b.id)===String(id)&&b.source==='market');
+  if(exists){exists.qty+=qty;updateBasketBadge();render();return;}
+  basket.push({uid:++basketUid,id:String(id),name,market_price:market_price||0,qty,source:'market'});
+  updateBasketBadge();render();
+}
+function removeFromBasket(uid){basket=basket.filter(b=>b.uid!==uid);updateBasketBadge();render();}
+function updateBasketQty(uid,val){
+  const b=basket.find(x=>x.uid===uid);if(!b)return;
+  const v=Math.max(1,parseInt(val)||1);b.qty=v;render();
+}
+function updateBasketPrice(uid,val){
+  const b=basket.find(x=>x.uid===uid);if(!b)return;
+  b.market_price=Math.max(0,parseInt(val)||0);render();
+}
+function updateBasketName(uid,val){
+  const b=basket.find(x=>x.uid===uid);if(!b)return;
+  b.name=val;
+}
+function clearBasket(){basket=[];updateBasketBadge();render();}
+function addManualRow(){
+  basket.push({uid:++basketUid,id:'manual_'+basketUid,name:'',market_price:0,qty:1,source:'manual'});
+  updateBasketBadge();render();
+}
+function updateBasketBadge(){
+  const cnt=basket.length;
+  const badge=$('cntB');
+  if(cnt>0){badge.style.display='inline';badge.textContent=cnt;}
+  else badge.style.display='none';
+}
+function isInBasket(id){return basket.some(b=>String(b.id)===String(id)&&b.source==='market');}
+function getBasketQty(id){const b=basket.find(x=>String(x.id)===String(id)&&x.source==='market');return b?b.qty:0;}
+
+// ── API ──
+async function loadMarket(){
+  const key=getKey();if(!key)return;
+  $('loadBtn').disabled=true;$('loadBtn').textContent='Loading...';
+  $('loader').style.display='block';$('loaderTxt').textContent='Pulling market data...';
+  $('marketView').innerHTML='';$('err').classList.remove('show');
+  try{
+    const r=await fetch('https://api.torn.com/torn/?selections=items&key='+key);
+    const data=await r.json();
+    if(data.error)throw new Error('API Error '+data.error.code+': '+data.error.error);
+    allItems=[];const cats=new Set();
+    for(const[id,item]of Object.entries(data.items||{})){
+      if(item.market_value>0){
+        allItems.push({id,name:item.name||'?',type:item.type||'Other',market_value:item.market_value,circulation:item.circulation||0});
+        cats.add(item.type||'Other');
+      }
+    }
+    const sel=$('catS');sel.innerHTML='<option value="">All Categories</option>';
+    [...cats].sort().forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);});
+    $('dot').classList.add('on');$('stTxt').textContent='Connected';
+    $('tabs').style.display='flex';$('ctrls').style.display='flex';$('chips').style.display='flex';
+    $('sT').textContent=allItems.length;$('sTm').textContent=new Date().toLocaleTimeString();$('cntM').textContent='('+allItems.length+')';
+    switchTab('market');render();
+  }catch(e){showErr(e.message);}
+  finally{$('loadBtn').disabled=false;$('loadBtn').textContent='Load Prices';$('loader').style.display='none';}
+}
+
+// ── Tab ──
+function switchTab(t){
+  currentTab=t;
+  openPopover=null;
+  $('tabMarket').classList.toggle('active',t==='market');
+  $('tabBasket').classList.toggle('active',t==='basket');
+  $('marketView').style.display=t==='market'?'block':'none';
+  $('basketView').style.display=t==='basket'?'block':'none';
+  $('catS').style.display=t==='market'?'':'none';
+  $('searchWrap').style.display=t==='market'?'block':'none';
+  $('chips').style.display=t==='market'?'flex':'none';
+  render();
+}
+
+function onPct(){pct=parseInt($('pctS').value);$('pctV').textContent=pct+'%';render();}
+function doSort(field){if(sortField===field)sortDir*=-1;else{sortField=field;sortDir=(field==='name'||field==='type')?1:-1;}render();}
+
+function render(){
+  if(currentTab==='market')renderMarket();
+  renderBasket();
+}
+
+function renderMarket(){
+  const q=$('sIn').value.toLowerCase().trim(),cat=$('catS').value;
+  let list=allItems.filter(it=>{
+    const mN=!q||it.name.toLowerCase().includes(q)||it.id.includes(q);
+    const mC=!cat||it.type===cat;return mN&&mC;
+  });
+  list.sort((a,b)=>{let va=a[sortField],vb=b[sortField];if(typeof va==='string'){va=va.toLowerCase();vb=(vb||'').toLowerCase();}return va<vb?-sortDir:va>vb?sortDir:0;});
+  $('sS').textContent=list.length;
+  const show=list.slice(0,500);
+  const si=f=>sortField===f?'<span class="arr">'+(sortDir===1?'▲':'▼')+'</span>':'';
+  const sc=f=>sortField===f?'sorted':'';
+
+  $('marketView').innerHTML='<div class="tw"><div class="ts"><table><thead><tr>'+
+    '<th style="cursor:default;width:50px"></th>'+
+    '<th class="'+sc('name')+'" onclick="doSort(\'name\')">Item'+si('name')+'</th>'+
+    '<th class="'+sc('type')+'" onclick="doSort(\'type\')">Type'+si('type')+'</th>'+
+    '<th class="'+sc('market_value')+'" onclick="doSort(\'market_value\')">Market Value'+si('market_value')+'</th>'+
+    '<th>'+pct+'% Price</th><th>Discount</th>'+
+    '<th class="'+sc('circulation')+'" onclick="doSort(\'circulation\')">Circ'+si('circulation')+'</th>'+
+    '</tr></thead><tbody>'+show.map(it=>{
+      const sp=Math.floor(it.market_value*(pct/100)),diff=it.market_value-sp;
+      const inB=isInBasket(it.id);
+      const bQty=getBasketQty(it.id);
+      const popOpen=openPopover===it.id;
+      const safeName=esc(it.name).replace(/'/g,"\\'");
+
+      let cellHtml='<td class="atb-cell">';
+      if(popOpen){
+        cellHtml+='<div class="qty-pop">'+
+          '<input type="number" id="qp-input-'+it.id+'" value="1" min="1" onkeydown="popoverKeydown(event,\''+it.id+'\')">'+
+          '<button class="qp-ok" onclick="confirmAdd(\''+it.id+'\')" title="Add">&#10003;</button>'+
+          '<button class="qp-x" onclick="togglePopover(\''+it.id+'\')" title="Cancel">&#10005;</button>'+
+          '</div>';
+      }
+      if(inB){
+        cellHtml+='<button class="add-btn in-basket" onclick="togglePopover(\''+it.id+'\')" title="In basket ('+bQty+'). Click to add more.">'+bQty+'</button>';
+      }else{
+        cellHtml+='<button class="add-btn" onclick="togglePopover(\''+it.id+'\')" title="Add to basket">+</button>';
+      }
+      cellHtml+='</td>';
+
+      return'<tr>'+cellHtml+
+        '<td><div class="ic"><img class="iimg" src="https://www.torn.com/images/items/'+it.id+'/large.png" alt="" loading="lazy" onerror="this.style.display=\'none\'"><span class="inm">'+esc(it.name)+'</span></div></td>'+
+        '<td><span class="itp">'+esc(it.type)+'</span></td>'+
+        '<td class="pm">'+fmt(it.market_value)+'</td>'+
+        '<td class="ps">'+fmt(sp)+'</td>'+
+        '<td class="pd">-'+fmt(diff)+'</td>'+
+        '<td class="pc">'+fmtN(it.circulation)+'</td></tr>';
+    }).join('')+'</tbody></table></div></div>'+(show.length===0?'<div class="empty"><div class="big">&#128270;</div>No items match.</div>':'');
+}
+
+function renderBasket(){
+  let totalMarket=0,totalSell=0,totalItems=0;
+  basket.forEach(b=>{
+    totalMarket+=b.market_price*b.qty;
+    totalSell+=Math.floor(b.market_price*(pct/100))*b.qty;
+    totalItems+=b.qty;
+  });
+  const totalSaved=totalMarket-totalSell;
+
+  if(currentTab!=='basket')return;
+
+  if(basket.length===0){
+    $('basketView').innerHTML='<div class="basket-panel"><div class="empty"><div class="big">&#128722;</div>Your selling basket is empty.<br><span style="font-size:11px;margin-top:6px;display:inline-block">Browse items and click <span style="color:var(--grn);font-weight:600">+</span> to add them, choosing how many.</span></div></div>';
+    return;
+  }
+
+  let html='<div class="basket-panel">';
+  html+='<div class="basket-header"><div class="bh-left"><span class="bh-icon">&#128722;</span><span class="bh-title">Selling Basket</span></div>';
+  html+='<div class="basket-actions"><button class="ba-btn ba-add" onclick="addManualRow()">+ Custom Item</button><button class="ba-btn ba-clear" onclick="clearBasket()">Clear All</button></div></div>';
+
+  html+='<div style="overflow-x:auto"><table class="basket-table"><thead><tr>';
+  html+='<th style="width:36px"></th><th>Item</th><th>Market Price</th><th>'+pct+'% Price</th><th>Qty</th><th>Subtotal</th>';
+  html+='</tr></thead><tbody>';
+
+  basket.forEach(b=>{
+    const sellUnit=Math.floor(b.market_price*(pct/100));
+    const sub=sellUnit*b.qty;
+    const isManual=b.source==='manual';
+
+    html+='<tr>';
+    html+='<td><button class="bsk-rm" onclick="removeFromBasket('+b.uid+')" title="Remove">&times;</button></td>';
+
+    if(isManual){
+      html+='<td><input type="text" class="bsk-name-input" value="'+esc(b.name)+'" onchange="updateBasketName('+b.uid+',this.value)" placeholder="Item name"></td>';
+    }else{
+      html+='<td><div class="ic"><img class="iimg" src="https://www.torn.com/images/items/'+b.id+'/large.png" alt="" loading="lazy" onerror="this.style.display=\'none\'"><span class="inm">'+esc(b.name)+'</span></div></td>';
+    }
+
+    if(isManual){
+      html+='<td><input type="number" class="bsk-price-input" value="'+b.market_price+'" min="0" onchange="updateBasketPrice('+b.uid+',this.value)" placeholder="Price"></td>';
+    }else{
+      html+='<td class="pm">'+fmt(b.market_price)+'</td>';
+    }
+
+    html+='<td class="ps">'+fmt(sellUnit)+'</td>';
+    html+='<td><input type="number" class="bsk-qty" value="'+b.qty+'" min="1" onchange="updateBasketQty('+b.uid+',this.value)"></td>';
+    html+='<td style="color:var(--ora);font-weight:600">'+fmt(sub)+'</td>';
+    html+='</tr>';
+  });
+
+  html+='</tbody></table></div>';
+
+  html+='<div class="basket-footer">';
+  html+='<div class="bf-stats">';
+  html+='<div class="bf-stat bf-items"><div class="bf-label">Items</div><div class="bf-val">'+totalItems+'</div></div>';
+  html+='<div class="bf-stat bf-market"><div class="bf-label">Market Total</div><div class="bf-val">'+fmtExact(totalMarket)+'</div></div>';
+  html+='<div class="bf-stat bf-saved"><div class="bf-label">Buyer Saves</div><div class="bf-val">-'+fmtExact(totalSaved)+'</div></div>';
+  html+='</div>';
+  html+='<div class="bf-stat bf-total"><div class="bf-label">Your Take at '+pct+'%</div><div class="bf-val">'+fmtExact(totalSell)+'</div></div>';
+  html+='</div>';
+
+  html+='</div>';
+  $('basketView').innerHTML=html;
+}
+
+// Close popover on outside click
+document.addEventListener('click',e=>{
+  if(openPopover!==null&&!e.target.closest('.atb-cell')){
+    openPopover=null;render();
+  }
+});
+
+$('keyIn').addEventListener('keydown',e=>{if(e.key==='Enter')loadMarket();});
+</script>
+</body>
+</html>
