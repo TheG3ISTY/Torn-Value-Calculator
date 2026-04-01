@@ -155,7 +155,9 @@
     <div class="kr">
       <div class="kw"><label>Torn API Key</label><input type="password" class="ki" id="keyIn" placeholder="16-character key" maxlength="16" autocomplete="off"></div>
       <button class="btn br" id="loadBtn" onclick="loadMarket()">Load Prices</button>
+      <button class="btn bd" id="forgetBtn" style="display:none" onclick="forgetKey()">Forget Key</button>
     </div>
+    <div id="keyNotice" style="display:none;margin-top:10px;font-size:10px;color:var(--txd);letter-spacing:0.5px;">&#128274; Key saved in your browser only. Never sent anywhere except Torn's API. <span style="color:var(--grn)">Click "Forget Key" to clear it.</span></div>
   </div>
 
   <div class="err" id="err"></div>
@@ -194,6 +196,25 @@ function fmtN(n){if(!n)return'—';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=
 function fmtExact(n){if(!n)return'$0';return'$'+n.toLocaleString();}
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 function getKey(){const k=$('keyIn').value.trim();if(!k||k.length!==16){showErr('API key must be exactly 16 characters.');return null;}return k;}
+
+// ── Key storage (localStorage, browser-only) ──
+function saveKey(k){try{localStorage.setItem('torn_mp_key',k);}catch(e){}}
+function loadSavedKey(){try{return localStorage.getItem('torn_mp_key')||'';}catch(e){return '';}}
+function forgetKey(){
+  try{localStorage.removeItem('torn_mp_key');}catch(e){}
+  $('keyIn').value='';
+  $('forgetBtn').style.display='none';
+  $('keyNotice').style.display='none';
+}
+// Auto-load saved key on page open
+(function(){
+  const saved=loadSavedKey();
+  if(saved){
+    $('keyIn').value=saved;
+    $('forgetBtn').style.display='inline-block';
+    $('keyNotice').style.display='block';
+  }
+})();
 
 // ── Add from inline qty field ──
 function inlineAdd(itemId){
@@ -281,6 +302,7 @@ async function loadMarket(){
     [...cats].sort().forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);});
     $('dot').classList.add('on');$('stTxt').textContent='Connected';
     $('tabs').style.display='flex';$('ctrls').style.display='flex';$('chips').style.display='flex';
+    saveKey(key);$('forgetBtn').style.display='inline-block';$('keyNotice').style.display='block';
     $('sT').textContent=allItems.length;$('sTm').textContent=new Date().toLocaleTimeString();$('cntM').textContent='('+allItems.length+')';
     switchTab('market');render();
   }catch(e){showErr(e.message);}
