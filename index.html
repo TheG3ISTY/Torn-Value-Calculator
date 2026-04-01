@@ -85,21 +85,13 @@
   .pm{color:var(--txd);}.ps{color:var(--grn);font-weight:600;}.pd{color:var(--red);font-size:10px;}.pc{color:var(--txd);font-size:11px;}
 
   /* ── Add-to-basket cell ── */
-  .atb-cell{position:relative;}
-  .add-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--brd);background:var(--s3);color:var(--grn);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;line-height:1;font-family:inherit;}
+  .atb-cell{white-space:nowrap;}
+  .atb-row{display:flex;align-items:center;gap:4px;}
+  .atb-qty{width:46px;height:28px;background:var(--s3);border:1px solid var(--brd);border-radius:5px;padding:0 4px;color:var(--tx);font-family:inherit;font-size:12px;text-align:center;outline:none;}
+  .atb-qty:focus{border-color:var(--grn);}
+  .add-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--brd);background:var(--s3);color:var(--grn);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;line-height:1;font-family:inherit;flex-shrink:0;}
   .add-btn:hover{background:var(--grn);color:#fff;border-color:var(--grn);box-shadow:0 0 10px rgba(34,217,123,.3);}
-  .add-btn.in-basket{background:var(--ora);border-color:var(--ora);color:#fff;font-size:11px;}
-  .add-btn.in-basket:hover{filter:brightness(1.2);}
-
-  /* Qty popover */
-  .qty-pop{position:absolute;left:36px;top:50%;transform:translateY(-50%);background:var(--s2);border:1px solid var(--grn);border-radius:8px;padding:6px;display:flex;align-items:center;gap:4px;z-index:20;box-shadow:0 4px 20px rgba(0,0,0,.5);animation:popIn .15s ease-out;}
-  @keyframes popIn{from{opacity:0;transform:translateY(-50%) scale(.9);}to{opacity:1;transform:translateY(-50%) scale(1);}}
-  .qty-pop input{width:54px;height:30px;background:var(--s3);border:1px solid var(--brd);border-radius:5px;padding:0 4px;color:var(--tx);font-family:inherit;font-size:12px;text-align:center;outline:none;}
-  .qty-pop input:focus{border-color:var(--grn);}
-  .qty-pop .qp-ok{width:30px;height:30px;border-radius:5px;border:none;background:var(--grn);color:#fff;font-size:14px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;transition:filter .1s;}
-  .qty-pop .qp-ok:hover{filter:brightness(1.2);}
-  .qty-pop .qp-x{width:30px;height:30px;border-radius:5px;border:1px solid var(--brd);background:var(--s3);color:var(--txd);font-size:13px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;}
-  .qty-pop .qp-x:hover{color:var(--red);border-color:var(--red);}
+  .atb-in{font-size:9px;color:var(--ora);min-width:20px;text-align:center;font-weight:600;}
 
   /* ── BASKET ── */
   .basket-panel{background:var(--surface);border:1px solid var(--brd);border-radius:12px;overflow:hidden;}
@@ -194,7 +186,6 @@
 <script>
 let allItems=[],basket=[],pct=90,sortField='market_value',sortDir=-1,currentTab='market';
 let basketUid=0;
-let openPopover=null; // track which item row has the qty popover open
 
 const $=id=>document.getElementById(id);
 function showErr(m){const e=$('err');e.textContent=m;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),8000);}
@@ -204,36 +195,43 @@ function fmtExact(n){if(!n)return'$0';return'$'+n.toLocaleString();}
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 function getKey(){const k=$('keyIn').value.trim();if(!k||k.length!==16){showErr('API key must be exactly 16 characters.');return null;}return k;}
 
-// ── Popover for qty before adding ──
-function togglePopover(itemId){
-  if(openPopover===itemId){openPopover=null;render();return;}
-  openPopover=itemId;
-  render();
-  // Focus the qty input after render
-  setTimeout(()=>{const inp=document.getElementById('qp-input-'+itemId);if(inp){inp.focus();inp.select();}},50);
-}
-
-function confirmAdd(itemId){
-  const inp=document.getElementById('qp-input-'+itemId);
+// ── Add from inline qty field ──
+function inlineAdd(itemId){
+  const inp=document.getElementById('qty-'+itemId);
   const qty=Math.max(1,parseInt(inp?.value)||1);
   const item=allItems.find(i=>i.id===itemId);
   if(!item)return;
   addToBasket(itemId,item.name,item.market_value,qty);
-  openPopover=null;
-  render();
+  // Reset field to 1 after adding
+  if(inp)inp.value='1';
 }
-
-function popoverKeydown(e,itemId){
-  if(e.key==='Enter')confirmAdd(itemId);
-  if(e.key==='Escape'){openPopover=null;render();}
-}
+function inlineKey(e,itemId){if(e.key==='Enter')inlineAdd(itemId);}
 
 // ── Basket logic ──
 function addToBasket(id,name,market_price,qty){
   const exists=basket.find(b=>String(b.id)===String(id)&&b.source==='market');
-  if(exists){exists.qty+=qty;updateBasketBadge();render();return;}
+  if(exists){exists.qty+=qty;updateBasketBadge();renderBasket();updateInBasketIndicators();return;}
   basket.push({uid:++basketUid,id:String(id),name,market_price:market_price||0,qty,source:'market'});
-  updateBasketBadge();render();
+  updateBasketBadge();renderBasket();updateInBasketIndicators();
+}
+
+// Update just the in-basket qty indicators without re-rendering the whole table
+function updateInBasketIndicators(){
+  document.querySelectorAll('.atb-in').forEach(el=>el.remove());
+  basket.forEach(b=>{
+    if(b.source!=='market')return;
+    const row=document.getElementById('qty-'+b.id);
+    if(!row)return;
+    const container=row.closest('.atb-row');
+    if(!container)return;
+    // Remove old indicator if any
+    const old=container.querySelector('.atb-in');
+    if(old)old.remove();
+    const span=document.createElement('span');
+    span.className='atb-in';
+    span.textContent=b.qty;
+    container.appendChild(span);
+  });
 }
 function removeFromBasket(uid){basket=basket.filter(b=>b.uid!==uid);updateBasketBadge();render();}
 function updateBasketQty(uid,val){
@@ -292,7 +290,6 @@ async function loadMarket(){
 // ── Tab ──
 function switchTab(t){
   currentTab=t;
-  openPopover=null;
   $('tabMarket').classList.toggle('active',t==='market');
   $('tabBasket').classList.toggle('active',t==='basket');
   $('marketView').style.display=t==='market'?'block':'none';
@@ -324,7 +321,7 @@ function renderMarket(){
   const sc=f=>sortField===f?'sorted':'';
 
   $('marketView').innerHTML='<div class="tw"><div class="ts"><table><thead><tr>'+
-    '<th style="cursor:default;width:50px"></th>'+
+    '<th style="cursor:default;width:100px">Add</th>'+
     '<th class="'+sc('name')+'" onclick="doSort(\'name\')">Item'+si('name')+'</th>'+
     '<th class="'+sc('type')+'" onclick="doSort(\'type\')">Type'+si('type')+'</th>'+
     '<th class="'+sc('market_value')+'" onclick="doSort(\'market_value\')">Market Value'+si('market_value')+'</th>'+
@@ -334,23 +331,12 @@ function renderMarket(){
       const sp=Math.floor(it.market_value*(pct/100)),diff=it.market_value-sp;
       const inB=isInBasket(it.id);
       const bQty=getBasketQty(it.id);
-      const popOpen=openPopover===it.id;
-      const safeName=esc(it.name).replace(/'/g,"\\'");
 
-      let cellHtml='<td class="atb-cell">';
-      if(popOpen){
-        cellHtml+='<div class="qty-pop">'+
-          '<input type="number" id="qp-input-'+it.id+'" value="1" min="1" onkeydown="popoverKeydown(event,\''+it.id+'\')">'+
-          '<button class="qp-ok" onclick="confirmAdd(\''+it.id+'\')" title="Add">&#10003;</button>'+
-          '<button class="qp-x" onclick="togglePopover(\''+it.id+'\')" title="Cancel">&#10005;</button>'+
-          '</div>';
-      }
-      if(inB){
-        cellHtml+='<button class="add-btn in-basket" onclick="togglePopover(\''+it.id+'\')" title="In basket ('+bQty+'). Click to add more.">'+bQty+'</button>';
-      }else{
-        cellHtml+='<button class="add-btn" onclick="togglePopover(\''+it.id+'\')" title="Add to basket">+</button>';
-      }
-      cellHtml+='</td>';
+      let cellHtml='<td class="atb-cell"><div class="atb-row">'+
+        '<input type="text" class="atb-qty" id="qty-'+it.id+'" value="1" onkeydown="inlineKey(event,\''+it.id+'\')">'+
+        '<button class="add-btn" onclick="inlineAdd(\''+it.id+'\')" title="Add to basket">+</button>'+
+        (inB?'<span class="atb-in">'+bQty+'</span>':'')+
+        '</div></td>';
 
       return'<tr>'+cellHtml+
         '<td><div class="ic"><img class="iimg" src="https://www.torn.com/images/items/'+it.id+'/large.png" alt="" loading="lazy" onerror="this.style.display=\'none\'"><span class="inm">'+esc(it.name)+'</span></div></td>'+
@@ -426,13 +412,6 @@ function renderBasket(){
   html+='</div>';
   $('basketView').innerHTML=html;
 }
-
-// Close popover on outside click
-document.addEventListener('click',e=>{
-  if(openPopover!==null&&!e.target.closest('.atb-cell')){
-    openPopover=null;render();
-  }
-});
 
 $('keyIn').addEventListener('keydown',e=>{if(e.key==='Enter')loadMarket();});
 </script>
